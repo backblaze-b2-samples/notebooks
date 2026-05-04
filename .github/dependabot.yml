@@ -1,0 +1,45 @@
+# Dependabot config for the Backblaze B2 sample notebooks repo.
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # GitHub Actions pinned in .github/workflows/*.yml
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      gh-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+      include: scope
+
+  # Python deps for each example notebook (one Dependabot watch per requirements.txt)
+  - package-ecosystem: pip
+    directory: "/ray-train-tune-checkpoints"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      ray-train-tune-deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(ray-train)"
+      include: scope
+
+  - package-ecosystem: pip
+    directory: "/image-classification-pytorch"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      image-classification-deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(image-classification)"
+      include: scope
