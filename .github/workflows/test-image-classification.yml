@@ -1,0 +1,90 @@
+name: Test image-classification-pytorch notebook
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "image-classification-pytorch/**"
+      - ".github/workflows/test-image-classification.yml"
+  pull_request:
+    paths:
+      - "image-classification-pytorch/**"
+      - ".github/workflows/test-image-classification.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: test-image-classification-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Execute cifar10_b2_pytorch_training.ipynb against backblaze-samples-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_EC2_METADATA_DISABLED: "true"
+      # B2 buckets are region-locked. The write bucket (backblaze-samples-ci)
+      # lives in us-east-005; mismatched region causes B2 to return 403 on the
+      # SigV4 signature check. The public CIFAR-10 read bucket (odh-datasets)
+      # is in us-west-001 but the notebook uses its own boto3 client for that.
+      AWS_DEFAULT_REGION: us-east-005
+      AWS_REGION: us-east-005
+      # CI-scoped Backblaze application key (CI_KEY_ID + CI_APP_KEY repo secrets),
+      # read+write+delete restricted to backblaze-samples-ci only.
+      AWS_ACCESS_KEY_ID: ${{ secrets.CI_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.CI_APP_KEY }}
+      # Notebook honors these env vars instead of prompting via input() / getpass().
+      PRIVATE_B2_BUCKET: backblaze-samples-ci
+      PRIVATE_B2_REGION: us-east-005
+      PRIVATE_B2_PREFIX: ci/cifar/run-${{ github.run_id }}-${{ github.run_attempt }}
+      # CI quick-smoke: 1 epoch on 2000 train + 500 test images. Cuts the run
+      # from ~30 min to ~2 min while still proving B2 read+write end-to-end.
+      CIFAR_EPOCHS: "1"
+      CIFAR_MAX_TRAIN: "2000"
+      CIFAR_MAX_TEST: "500"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: image-classification-pytorch/requirements.txt
+
+      - name: Install notebook deps + test runner
+        working-directory: image-classification-pytorch
+        run: |
+          pip install -r requirements.txt
+          pip install nbmake pytest awscli
+
+      - name: Fail fast if the public CIFAR-10 dataset is missing
+        run: |
+          set -e
+          # Notebook reads training images from odh-datasets/cifar10/imagefolder/v1.0/.
+          # The notebook ships its own pre-shared read-only key for the public bucket,
+          # but a presence check via the CI key would fail (cross-account). Skip the
+          # remote-side check and rely on the notebook's own initial-cell listing to
+          # surface dataset-missing errors. (Same fail-fast intent as ray-train; the
+          # mechanism differs because cifar uses an embedded read key, not anonymous.)
+          echo "Public dataset is assumed live at s3://odh-datasets/cifar10/imagefolder/v1.0/"
+
+      - name: Execute notebook with nbmake
+        working-directory: image-classification-pytorch
+        run: |
+          # -s / --capture=no streams cell stdout to the job log live so you can
+          # watch the notebook progress instead of staring at a black box for
+          # 10+ minutes. The colab/CI/fallback resolution in the notebook itself
+          # handles the upload-widget cell when google.colab is unavailable.
+          pytest -s --nbmake --nbmake-timeout=2700 -v cifar10_b2_pytorch_training.ipynb
+
+      - name: Cleanup CI run artifacts (always, even on failure)
+        if: always()
+        run: |
+          aws s3 rm \
+            "s3://${PRIVATE_B2_BUCKET}/${PRIVATE_B2_PREFIX}/" \
+            --recursive \
+            --endpoint-url "https://s3.${PRIVATE_B2_REGION}.backblazeb2.com" \
+            || echo "::warning::Cleanup partial; bucket lifecycle rule will handle the rest."

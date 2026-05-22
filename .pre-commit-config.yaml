@@ -1,0 +1,51 @@
+# See https://pre-commit.com for usage and config reference.
+# Run locally: `pre-commit run --all-files` (after `pip install pre-commit`).
+# CI runs the same config in .github/workflows/lint.yml.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  # Strip notebook output cells before commit.
+  # Keeps diffs readable and prevents accidental credential / bucket-name leakage
+  # from interactive runs.
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout
+
+  # Lint the Python code inside notebook cells with the same ruff config the
+  # rest of the repo uses.
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.9.1
+    hooks:
+      - id: nbqa-ruff
+        args: ["--ignore=E402,E501"]
+        additional_dependencies: ["ruff==0.13.0"]  # E402 (top-level imports) + E501 (line length) are common in tutorial notebooks
+
+  # Typo catcher.
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: ["--ignore-words-list=nd"]
+        exclude: "^.*\\.ipynb$"  # codespell on notebooks is noisy; covered by nbqa instead
+
+  # Custom: forbid em dashes and en dashes anywhere in the repo.
+  # See scripts/forbid_em_dash.py for the implementation.
+  - repo: local
+    hooks:
+      - id: no-em-or-en-dash
+        name: Forbid em dashes (U+2014) and en dashes (U+2013)
+        entry: python3 scripts/forbid_em_dash.py
+        language: system
+        types_or: [text]
+        exclude: "^\\.git/"

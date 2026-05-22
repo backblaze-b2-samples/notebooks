@@ -1,0 +1,56 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pre-commit/action@v3.0.1
+
+  validate-notebooks:
+    name: Validate notebook JSON + Python cell syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Parse every .ipynb (JSON + per-cell ast)
+        run: |
+          python - <<'PY'
+          import ast, json, glob, sys
+          fail = False
+          for nb_path in sorted(glob.glob("**/*.ipynb", recursive=True)):
+              try:
+                  nb = json.load(open(nb_path))
+              except Exception as exc:
+                  print(f"::error file={nb_path}::JSON invalid: {exc}")
+                  fail = True
+                  continue
+              for i, cell in enumerate(nb["cells"]):
+                  if cell["cell_type"] != "code":
+                      continue
+                  src = "".join(cell["source"]) if isinstance(cell["source"], list) else cell["source"]
+                  # Skip magic / shell-escape cells.
+                  if src.lstrip().startswith(("%", "!")):
+                      continue
+                  try:
+                      ast.parse(src)
+                  except SyntaxError as exc:
+                      print(f"::error file={nb_path},line={i}::cell {i} syntax error: {exc}")
+                      fail = True
+              print(f"{nb_path}: {len(nb['cells'])} cells OK")
+          sys.exit(1 if fail else 0)
+          PY

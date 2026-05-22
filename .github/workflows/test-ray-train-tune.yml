@@ -1,0 +1,98 @@
+name: Test ray-train-tune-checkpoints notebook
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ray-train-tune-checkpoints/**"
+      - ".github/workflows/test-ray-train-tune.yml"
+  pull_request:
+    paths:
+      - "ray-train-tune-checkpoints/**"
+      - ".github/workflows/test-ray-train-tune.yml"
+  workflow_dispatch:
+
+# Cancel in-flight runs for the same ref when a new push lands.
+concurrency:
+  group: test-ray-train-tune-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Execute ray_train_b2.ipynb against backblaze-samples-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # The WRITE bucket (backblaze-samples-ci) is in us-east-005.
+      # The public dataset bucket (b2datasets) is in us-west-001; the notebook
+      # pins an explicit S3FileSystem(endpoint_override=...) for that read path,
+      # so the env-var endpoint below only affects pyarrow's checkpoint writes
+      # (via Ray Train's pyarrow.fs.from_uri("s3://...") resolution).
+      AWS_ENDPOINT_URL_S3: https://s3.us-east-005.backblazeb2.com
+      AWS_EC2_METADATA_DISABLED: "true"
+      # pyarrow signs requests with SigV4 and B2 rejects mismatched regions
+      # with a 403, not a "wrong region" redirect. Region must match the
+      # PRIVATE bucket's region (us-east-005), not the public dataset's region.
+      AWS_DEFAULT_REGION: us-east-005
+      AWS_REGION: us-east-005
+      # CI-scoped Backblaze application key, read+write+delete restricted to
+      # the backblaze-samples-ci bucket only. Secrets are configured at
+      # https://github.com/backblaze-b2-samples/notebooks/settings/secrets/actions.
+      AWS_ACCESS_KEY_ID: ${{ secrets.CI_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.CI_APP_KEY }}
+      # Bucket + per-run prefix the notebook should write checkpoints to.
+      # The bucket's lifecycle rule auto-deletes anything under ci/ within 2 days.
+      PRIVATE_B2_BUCKET: backblaze-samples-ci
+      PRIVATE_B2_PREFIX: ci/ray-train/run-${{ github.run_id }}-${{ github.run_attempt }}
+      # Skip the optional Tune sweep in CI (Ray Train v2 API gap; the cell is
+      # explicitly marked optional in the notebook).
+      SKIP_TUNE_CELL: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ray-train-tune-checkpoints/requirements.txt
+
+      - name: Install notebook deps + test runner
+        working-directory: ray-train-tune-checkpoints
+        run: |
+          pip install -r requirements.txt
+          pip install nbmake pytest awscli
+
+      - name: Fail fast if the seeded dataset is missing
+        run: |
+          set -e
+          # The notebook reads via pyarrow.fs.S3FileSystem(anonymous=True), which
+          # does GETs on specific keys (not LIST). B2 public buckets allow that
+          # but DO require auth for ListObjectsV2, so we check via a plain HTTPS
+          # HEAD that exactly matches what pyarrow does at read time.
+          URL="https://b2datasets.s3.us-west-001.backblazeb2.com/ray-train-demo/california_housing/train.parquet"
+          if ! curl -fsSI "$URL" >/dev/null; then
+            echo "::error::Seed dataset missing or unreachable at $URL"
+            echo "Run prepare_dataset.py locally and upload via 'b2 file upload', then re-run this workflow."
+            exit 1
+          fi
+          echo "Seed dataset present at $URL"
+
+      - name: Execute notebook with nbmake
+        working-directory: ray-train-tune-checkpoints
+        run: |
+          # -s / --capture=no streams cell stdout to the job log live so you
+          # can watch progress instead of waiting silently for 10+ minutes.
+          pytest -s --nbmake --nbmake-timeout=1200 -v ray_train_b2.ipynb
+
+      - name: Cleanup CI run artifacts (always, even on failure)
+        if: always()
+        run: |
+          # Best-effort cleanup. Lifecycle rule will catch anything we miss.
+          aws s3 rm \
+            "s3://${PRIVATE_B2_BUCKET}/${PRIVATE_B2_PREFIX}/" \
+            --recursive \
+            --endpoint-url $AWS_ENDPOINT_URL_S3 \
+            || echo "::warning::Cleanup partial; lifecycle rule will handle the rest."
