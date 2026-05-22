@@ -1,0 +1,83 @@
+name: Test whisper-b2-transcription notebook
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "whisper-b2-transcription/**"
+      - ".github/workflows/test-whisper.yml"
+  pull_request:
+    paths:
+      - "whisper-b2-transcription/**"
+      - ".github/workflows/test-whisper.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: test-whisper-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Execute whisper_b2_transcription.ipynb against backblaze-samples-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      AWS_EC2_METADATA_DISABLED: "true"
+      # Write bucket (backblaze-samples-ci) lives in us-east-005. The notebook
+      # pins the public-read endpoint + region explicitly per-client, so this
+      # env-var region only affects the write client.
+      AWS_DEFAULT_REGION: us-east-005
+      AWS_REGION: us-east-005
+      AWS_ACCESS_KEY_ID: ${{ secrets.CI_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.CI_APP_KEY }}
+      # Notebook honors these env vars instead of prompting.
+      PRIVATE_B2_BUCKET: backblaze-samples-ci
+      PRIVATE_B2_REGION: us-east-005
+      PRIVATE_B2_PREFIX: ci/whisper/run-${{ github.run_id }}-${{ github.run_attempt }}
+      # tiny model finishes in seconds on CPU; appropriate for the JFK demo clip.
+      WHISPER_MODEL_SIZE: tiny
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: whisper-b2-transcription/requirements.txt
+
+      - name: Install ffmpeg (Whisper hard dep)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install notebook deps + test runner
+        working-directory: whisper-b2-transcription
+        run: |
+          pip install -r requirements.txt
+          pip install nbmake pytest awscli
+
+      - name: Fail fast if the seeded jfk.flac is missing
+        run: |
+          set -e
+          URL="https://b2datasets.s3.us-west-001.backblazeb2.com/whisper-demo/jfk.flac"
+          if ! curl -fsSI "$URL" >/dev/null; then
+            echo "::error::Seed audio missing or unreachable at $URL"
+            echo "Run prepare_dataset.py locally (--bucket b2datasets --prefix whisper-demo) and re-run this workflow."
+            exit 1
+          fi
+          echo "Seed audio present at $URL"
+
+      - name: Execute notebook with nbmake
+        working-directory: whisper-b2-transcription
+        run: |
+          pytest -s --nbmake --nbmake-timeout=900 -v whisper_b2_transcription.ipynb
+
+      - name: Cleanup CI run artifacts (always, even on failure)
+        if: always()
+        run: |
+          aws s3 rm \
+            "s3://${PRIVATE_B2_BUCKET}/${PRIVATE_B2_PREFIX}/" \
+            --recursive \
+            --endpoint-url "https://s3.${PRIVATE_B2_REGION}.backblazeb2.com" \
+            || echo "::warning::Cleanup partial; bucket lifecycle rule will handle the rest."
