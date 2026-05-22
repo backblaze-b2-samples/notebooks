@@ -26,6 +26,16 @@ learning rates. Companion to the [Ray Train persistent-storage user guide](https
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/backblaze-b2-samples/notebooks/blob/main/ray-train-tune-checkpoints/ray_train_b2.ipynb) [![Open In Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/backblaze-b2-samples/notebooks/HEAD?urlpath=lab/tree/ray-train-tune-checkpoints/ray_train_b2.ipynb) [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/backblaze-b2-samples/notebooks?quickstart=1)
 
+### [`whisper-b2-transcription/`](./whisper-b2-transcription/)
+
+Speech-to-text transcription on Backblaze B2 with [OpenAI Whisper](https://github.com/openai/whisper).
+Streams a public-domain demo audio clip (`jfk.flac`) from a public B2 bucket via
+the S3-compatible API, runs Whisper for ASR, and optionally writes the
+transcript JSON back to a private B2 bucket. Starting point for batch
+transcription pipelines on B2-hosted audio archives.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/backblaze-b2-samples/notebooks/blob/main/whisper-b2-transcription/whisper_b2_transcription.ipynb) [![Open In Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/backblaze-b2-samples/notebooks/HEAD?urlpath=lab/tree/whisper-b2-transcription/whisper_b2_transcription.ipynb) [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/backblaze-b2-samples/notebooks?quickstart=1)
+
 ## How to run an example
 
 Each example directory has its own `README.md` with detailed setup instructions, but in
