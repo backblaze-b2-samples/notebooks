@@ -4,6 +4,20 @@ Example notebooks demonstrating how to use [Backblaze B2 Cloud Storage](https://
 with AI and data workflows. Each subdirectory is a self-contained example with its own
 `README.md`, dependencies, and runnable notebook.
 
+## Contents
+
+- [Backblaze B2 sample notebooks](#backblaze-b2-sample-notebooks)
+  - [Contents](#contents)
+  - [Examples](#examples)
+    - [`image-classification-pytorch/`](#image-classification-pytorch)
+    - [`ray-train-tune-checkpoints/`](#ray-train-tune-checkpoints)
+    - [`whisper-b2-transcription/`](#whisper-b2-transcription)
+    - [`lakefs-b2-dataset-versioning/`](#lakefs-b2-dataset-versioning)
+  - [How to run an example](#how-to-run-an-example)
+  - [Backblaze B2 prerequisites](#backblaze-b2-prerequisites)
+  - [Contributing](#contributing)
+  - [Related](#related)
+
 ## Examples
 
 ### [`image-classification-pytorch/`](./image-classification-pytorch/)
@@ -35,6 +49,19 @@ transcript JSON back to a private B2 bucket. Starting point for batch
 transcription pipelines on B2-hosted audio archives.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/backblaze-b2-samples/notebooks/blob/main/whisper-b2-transcription/whisper_b2_transcription.ipynb) [![Open In Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/backblaze-b2-samples/notebooks/HEAD?urlpath=lab/tree/whisper-b2-transcription/whisper_b2_transcription.ipynb) [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/backblaze-b2-samples/notebooks?quickstart=1)
+
+### [`lakefs-b2-dataset-versioning/`](./lakefs-b2-dataset-versioning/)
+
+Branch-per-experiment dataset versioning for ML with [lakeFS](https://lakefs.io) on top of
+Backblaze B2. Walks a satellite-imagery scenario: ingest a tile catalog on `main`,
+branch into `experiment-cloud-mask-v2`, rerun a stricter cloud classifier, diff against
+`main`, merge, then roll back, all through the lakeFS Python SDK. Pairs with the
+[`lakefs-on-b2-quickstart`](https://github.com/backblaze-b2-samples/lakefs-on-b2-quickstart)
+Docker Compose stack for the lakeFS server. Companion to
+[treeverse/lakeFS#10426](https://github.com/treeverse/lakeFS/pull/10426), which added the
+`lakefs/<version>` `User-Agent` on every outbound B2 request.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/backblaze-b2-samples/notebooks/blob/main/lakefs-b2-dataset-versioning/lakefs_b2_dataset_versioning.ipynb) [![Open In Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/backblaze-b2-samples/notebooks/HEAD?urlpath=lab/tree/lakefs-b2-dataset-versioning/lakefs_b2_dataset_versioning.ipynb) [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/backblaze-b2-samples/notebooks?quickstart=1)
 
 ## How to run an example
 
