@@ -137,7 +137,7 @@ even if cleanup fails the artifacts don't accumulate.
 ### `lint.yml`
 
 Single workflow that:
-1. Runs `pre-commit run --all-files` via `pre-commit/action@v3.0.1`.
+1. Installs a pinned `pre-commit`, caches `~/.cache/pre-commit`, and runs `pre-commit run --all-files`.
 2. Walks every `*.ipynb` and validates JSON + per-cell `ast.parse`.
 
 Runs on every push to any branch.
